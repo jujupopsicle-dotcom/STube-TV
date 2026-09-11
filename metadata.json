@@ -1,0 +1,6 @@
+{
+  "name": "YouTube TV",
+  "description": "Aplikasi YouTube versi Android TV dengan navigasi remote D-Pad, pencarian instan, dan integrasi Akun Google.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

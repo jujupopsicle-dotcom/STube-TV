@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">YouTube TV</string>
+    <string name="nav_home">Beranda</string>
+    <string name="nav_search">Pencarian</string>
+    <string name="nav_music">Musik</string>
+    <string name="nav_gaming">Gaming</string>
+    <string name="nav_news">Berita</string>
+    <string name="nav_account">Akun Google</string>
+    <string name="nav_web_tv">Mode Web TV</string>
+    <string name="search_hint">Cari video di YouTube…</string>
+    <string name="search_btn">Cari</string>
+    <string name="quick_suggestions">Pencarian Populer</string>
+    <string name="no_results">Tidak ada video yang ditemukan</string>
+    <string name="google_sign_in">Masuk dengan Google</string>
+    <string name="google_sign_out">Keluar dari Akun</string>
+    <string name="tv_remote_guide">Navigasi: [D-Pad] Arah | [OK/Enter] Pilih | [Kembali] Tutup / Mundur</string>
+</resources>

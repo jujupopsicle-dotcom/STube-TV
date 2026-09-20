@@ -19,14 +19,23 @@ object YouTubeAdBlocker {
         "ads.youtube.com",
         "youtube.com/pagead/",
         "youtube.com/api/stats/ads",
-        "youtube.com/ptracking",
-        "youtube.com/get_midroll_info",
-        "video-stats.l.google.com"
+        "youtube.com/ptracking"
     )
 
     fun shouldBlockUrl(url: String?): Boolean {
         if (url.isNullOrEmpty()) return false
         val lower = url.lowercase()
+
+        // Safety: Never block essential YouTube components
+        if (lower.contains("youtube.com/embed") ||
+            lower.contains("youtube.com/s/") ||
+            lower.contains("youtube.com/yts/") ||
+            lower.contains("youtube.com/iframe_api") ||
+            lower.contains("ytimg.com")
+        ) {
+            return false
+        }
+
         return BLOCKED_DOMAINS_AND_PATHS.any { lower.contains(it) }
     }
 
@@ -69,13 +78,16 @@ object YouTubeAdBlocker {
                     }
 
                     // 2. Fast forward and mute unskippable video ads
-                    var adOverlay = document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay');
+                    // Only act if the player container has the 'ad-showing' or 'ad-interrupting' class
+                    var playerContainer = document.querySelector('.html5-video-player');
+                    var isAdActive = playerContainer && (playerContainer.classList.contains('ad-showing') || playerContainer.classList.contains('ad-interrupting'));
+                    
                     var video = document.querySelector('video');
-                    if (adOverlay && video) {
+                    if (isAdActive && video) {
                         video.muted = true;
                         video.playbackRate = 16.0;
-                        if (isFinite(video.duration) && video.duration > 0) {
-                            video.currentTime = video.duration;
+                        if (isFinite(video.duration) && video.duration > 0 && video.currentTime < video.duration) {
+                            video.currentTime = video.duration - 0.1; // Jump to near end
                         }
                     } else if (video && video.playbackRate > 2.0) {
                         video.playbackRate = 1.0;

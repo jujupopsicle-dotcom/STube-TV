@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -109,65 +110,69 @@ fun YouTubePlayerView(
             .background(Color.Black)
     ) {
         // Hardware Accelerated YouTube WebView
-        AndroidView(
-            factory = { context ->
-                WebView(context).apply {
-                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        mediaPlaybackRequiresUserGesture = false
-                        databaseEnabled = true
-                        useWideViewPort = true
-                        loadWithOverviewMode = true
-                        cacheMode = WebSettings.LOAD_DEFAULT
-                        // Set standard Smart TV / Modern Chrome user agent
-                        userAgentString =
-                            "Mozilla/5.0 (Linux; Android 9; SHIELD Android TV Build/PPR1.180610.011) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.225 Safari/537.36 SmartTV"
+        key(video.id) {
+            AndroidView(
+                factory = { context ->
+                    WebView(context).apply {
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            mediaPlaybackRequiresUserGesture = false
+                            databaseEnabled = true
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+                            cacheMode = WebSettings.LOAD_DEFAULT
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            // Set standard Smart TV / Modern Chrome user agent
+                            userAgentString =
+                                "Mozilla/5.0 (Linux; Android 9; SHIELD Android TV Build/PPR1.180610.011) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.225 Safari/537.36 SmartTV"
+                        }
+                        webChromeClient = object : WebChromeClient() {}
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                super.onPageStarted(view, url, favicon)
+                                isLoading = true
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                isLoading = false
+                                if (adBlockerEnabled) {
+                                    view?.evaluateJavascript(YouTubeAdBlocker.AD_SKIPPER_JAVASCRIPT, null)
+                                }
+                            }
+
+                            override fun shouldInterceptRequest(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): WebResourceResponse? {
+                                if (adBlockerEnabled && YouTubeAdBlocker.shouldBlockUrl(request?.url?.toString())) {
+                                    return YouTubeAdBlocker.createEmptyResponse()
+                                }
+                                return super.shouldInterceptRequest(view, request)
+                            }
+
+                            @Deprecated("Deprecated in Java")
+                            override fun shouldInterceptRequest(view: WebView?, url: String?): WebResourceResponse? {
+                                if (adBlockerEnabled && YouTubeAdBlocker.shouldBlockUrl(url)) {
+                                    return YouTubeAdBlocker.createEmptyResponse()
+                                }
+                                return super.shouldInterceptRequest(view, url)
+                            }
+                        }
+
+                        val playerHtml = getPlayerHtml(video.id, autoplay, adBlockerEnabled)
+                        loadDataWithBaseURL("https://www.youtube.com", playerHtml, "text/html", "UTF-8", null)
+                        webViewInstance = this
                     }
-                    webChromeClient = object : WebChromeClient() {}
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            super.onPageStarted(view, url, favicon)
-                            isLoading = true
-                        }
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            super.onPageFinished(view, url)
-                            isLoading = false
-                            if (adBlockerEnabled) {
-                                view?.evaluateJavascript(YouTubeAdBlocker.AD_SKIPPER_JAVASCRIPT, null)
-                            }
-                        }
-
-                        override fun shouldInterceptRequest(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): WebResourceResponse? {
-                            if (adBlockerEnabled && YouTubeAdBlocker.shouldBlockUrl(request?.url?.toString())) {
-                                return YouTubeAdBlocker.createEmptyResponse()
-                            }
-                            return super.shouldInterceptRequest(view, request)
-                        }
-
-                        @Deprecated("Deprecated in Java")
-                        override fun shouldInterceptRequest(view: WebView?, url: String?): WebResourceResponse? {
-                            if (adBlockerEnabled && YouTubeAdBlocker.shouldBlockUrl(url)) {
-                                return YouTubeAdBlocker.createEmptyResponse()
-                            }
-                            return super.shouldInterceptRequest(view, url)
-                        }
-                    }
-
-                    val playerHtml = getPlayerHtml(video.id, autoplay, adBlockerEnabled)
-                    loadDataWithBaseURL("https://www.youtube.com", playerHtml, "text/html", "UTF-8", null)
-                    webViewInstance = this
-                }
-            },
-            update = { wv ->
-                webViewInstance = wv
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+                },
+                update = { wv ->
+                    webViewInstance = wv
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Loading spinner
         if (isLoading) {
@@ -484,7 +489,8 @@ private fun getPlayerHtml(videoId: String, autoplay: Boolean, adBlockerEnabled: 
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-            #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+            #player-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; background: #000; }
+            #player { width: 100%; height: 100%; }
             iframe { width: 100% !important; height: 100% !important; border: 0 !important; }
             $adCss
           </style>
@@ -503,23 +509,30 @@ private fun getPlayerHtml(videoId: String, autoplay: Boolean, adBlockerEnabled: 
 
             var player;
             function onYouTubeIframeAPIReady() {
-              player = new YT.Player('player', {
-                videoId: '$videoId',
-                playerVars: {
-                  'autoplay': $autoplayVal,
-                  'controls': 1,
-                  'rel': 0,
-                  'playsinline': 1,
-                  'enablejsapi': 1,
-                  'iv_load_policy': 3,
-                  'modestbranding': 1,
-                  'fs': 1,
-                  'origin': 'https://www.youtube.com'
-                },
-                events: {
-                  'onReady': function(e) { $onReadyJs }
-                }
-              });
+              try {
+                player = new YT.Player('player', {
+                  height: '100%',
+                  width: '100%',
+                  videoId: '$videoId',
+                  playerVars: {
+                    'autoplay': $autoplayVal,
+                    'controls': 1,
+                    'rel': 0,
+                    'playsinline': 1,
+                    'enablejsapi': 1,
+                    'iv_load_policy': 3,
+                    'modestbranding': 1,
+                    'fs': 1,
+                    'origin': 'https://www.youtube.com'
+                  },
+                  events: {
+                    'onReady': function(e) { $onReadyJs },
+                    'onError': function(e) { console.error('YT Player Error:', e.data); }
+                  }
+                });
+              } catch (e) {
+                console.error('YT API Initialization failed:', e);
+              }
             }
 
             function playVideo() {
